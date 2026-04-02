@@ -1,0 +1,73 @@
+# 系统配置
+system:
+  device: "cuda"  # or "cpu"
+  num_workers: 4
+  seed: 42
+  log_level: "INFO"
+
+# 相机配置 (OV2640)
+camera:
+  fov_x_deg: 62.0  # 水平视场角: 62° (来自OV2640规格)
+  sensor_width: 3.2   # 传感器宽度 (mm), OV2640 为 1/4" ≈ 3.2mm
+  sensor_height: 2.4  # 传感器高度 (mm), OV2640 为 1/4" ≈ 2.4mm
+  focal_length: 4.3   # 焦距 (mm), EFL=4.3mm
+
+# Depth Anything 2 配置
+da2:
+  scene: "outdoor" # indoor & outdoor
+  dataset: 
+    indoor: "hypersim" # 'hypersim' for indoor model, 'vkitti' for outdoor model
+    outdoor: "vkitti"
+  encoder: "vitl"
+  checkpoint_paths:
+    hypersim:
+      vitl: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_hypersim_vitl.pth"
+      vitb: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_hypersim_vitb.pth"
+      vits: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_hypersim_vits.pth"
+    vkitti:
+      vitl: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_vkitti_vitl.pth"
+      vitb: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_vkitti_vitb.pth"
+      vits: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_vkitti_vits.pth"
+  model_configs:
+    vits: {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]}
+    vitb: {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]}
+    vitl: {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]}
+  max_depth:
+    indoor: 20
+    outdoor: 80
+
+# SAM3配置
+sam3:
+  checkpoint_path: "models/sam3/checkpoints/sam3.pt"
+
+# Qwen3VL配置
+qwen3vl:
+  enabled: true
+  keep_loaded: false
+  device: "cpu"
+  checkpoint_path: "models/Qwen3-VL/checkpoints/Qwen3-VL-8B-Instruct"
+
+# 路径配置
+paths:
+  input_image_folder: "data/input/image"
+  output_depth_folder: "data/output/depth_image"
+  output_sam3_json_folder: "data/output/sam3_json"
+  temp_organized_json_folder: "data/temp"  
+  output_correct_json_folder: "data/output/correct"
+  output_navigation_folder: "data/output/navigation"
+
+# 导航生成器配置
+navigation:
+  enabled: true
+  output_language: "zh"  # 输出语言: "zh" 中文 或 "en" 英文
+  device: "cuda"
+  # 可选：指定Qwen3文本模型路径（如果不设置则使用模板）
+  # checkpoint_path: "models/Qwen3-VL/checkpoints/Qwen3-VL-8B-Instruct"
+  max_new_tokens: 128
+
+# TTS配置
+tts:
+  enabled: false  # 设为false仅显示文字，不播放声音
+  backend: "system"
+  language: "en"
+  voice_hint: "English"

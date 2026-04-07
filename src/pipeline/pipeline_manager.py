@@ -93,7 +93,8 @@ class PipelineManager:
                     output_sam3_json_folder_str,
                     temp_organized_json_folder_str,
                     output_correct_json_folder_str,
-                    output_navigation_folder_str):
+                    output_navigation_folder_str,
+                    play_tts=True):
         """
         处理单张图像
         
@@ -154,16 +155,26 @@ class PipelineManager:
                                             )
 
         # 9. 语音播报
-        logger.info("Running English TTS Playback...")
-        tts_result = self.components['tts'].speak(
-                                            navigation_result.get("navigation_sentence", "")
-                                            )
-        navigation_result.update(tts_result)
-        self.components['navigation'].save_result(
-                                            image_path,
-                                            output_navigation_folder_str,
-                                            navigation_result
-                                            )
+        if play_tts:
+            logger.info("Running English TTS Playback...")
+            tts_result = self.components['tts'].speak(
+                                                navigation_result.get("navigation_sentence", "")
+                                                )
+            navigation_result.update(tts_result)
+            self.components['navigation'].save_result(
+                                                image_path,
+                                                output_navigation_folder_str,
+                                                navigation_result
+                                                )
+        else:
+            logger.info("Skipping English TTS Playback...")
+            tts_result = {
+                "tts_enabled": False,
+                "tts_backend": "system",
+                "tts_status": "disabled_for_video_demo",
+                "tts_error": "",
+            }
+            navigation_result.update(tts_result)
     
             
         return {

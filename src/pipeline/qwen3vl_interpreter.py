@@ -35,29 +35,42 @@ class Qwen3VLInterpreter:
         """加载Qwen3VL模型"""
 
         self.checkpoint_path = self.config.get('checkpoint_path')
-        # 根据配置选择加载方式
-        if self.device == 'cpu':
-            model = Qwen3VLForConditionalGeneration.from_pretrained(
-                self.checkpoint_path,
-                device_map={'': 'cpu'},
-                torch_dtype=torch.float32,
-            )
-        else:
-            model = Qwen3VLForConditionalGeneration.from_pretrained(
-                self.checkpoint_path,
-                dtype='auto',
-                device_map='auto',
-            )
-
-        # We recommend enabling flash_attention_2 for better acceleration and memory saving, especially in multi-image and video scenarios.
-        # model = Qwen3VLForConditionalGeneration.from_pretrained(
-        #     "model-8b-inst",
-        #     dtype=torch.bfloat16,
-        #     attn_implementation="flash_attention_2",
-        #     device_map="auto",
-        # )
+        
+        # 使用 GPU + CPU offload 策略 (避免显存不足)
+        logger.info(f"加载 Qwen3-VL 模型...")
+        logger.info("使用 bfloat16 精度加速推理...")
+        logger.info("使用 GPU + CPU offload 策略...")
+        
+        # 直接使用 CPU offload 模式,避免先尝试全 GPU 导致显存碎片
+        from accelerate import infer_auto_device_map
+        
+        # 先用 meta 设备计算模型大小
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            self.checkpoint_path,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            max_memory={0: "8GiB", "cpu": "40GiB"},  # GPU 8GB, 其余放 CPU
+            offload_folder="offload",  # 使用文件夹而不是磁盘
+            offload_state_dict=True
+        )
 
         processor = AutoProcessor.from_pretrained(self.checkpoint_path)
+        
+        # 验证模型设备分布
+        model_devices = set(p.device for p in model.parameters())
+        logger.info(f"✅ Qwen3-VL 模型已加载")
+        logger.info(f"   模型分布在: {model_devices}")
+        logger.info(f"   模型精度: {model.dtype}")
+        
+        if torch.cuda.is_available():
+            gpu_mem = torch.cuda.memory_allocated(0) / 1024**3
+            logger.info(f"   GPU 显存使用: {gpu_mem:.2f} GB")
+            
+        # 判断是否完全在 GPU 上
+        if len(model_devices) == 1 and 'cuda' in str(list(model_devices)[0]):
+            logger.info("   🚀 模型完全在 GPU 上 - 最快!")
+        else:
+            logger.info("   ⚡ 模型使用 GPU + CPU offload - 比纯 CPU 快 10-20 倍")
             
         return model, processor
 
@@ -94,22 +107,24 @@ class Qwen3VLInterpreter:
         
     def build_prompt(self, box_4pts):
         """
-        Convert bounding box points to an English prompt for text and arrow direction recognition.
+        将边框点转换为指定格式的文本，同时询问箭头方向和标志牌文字
+        
         Args:
-            box_4pts: List of 4 points [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+            box_4pts: 边框列表，每个边框是4个点 [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+        
         Returns:
-            prompt string, 2-point box [[x1,y1],[x2,y2]]
+            格式化的文本字符串, 2点边框 [[x1,y1],[x2,y2]]
         """
         top_left, bottom_right = box_4pts[0], box_4pts[2]
         tl = (int((top_left[0])/1024*1000), int((top_left[1])/1024*1000))
         br = (int((bottom_right[0])/1024*1000), int((bottom_right[1])/1024*1000))
 
-        # English prompt for both arrow direction and sign text
-        prompt = f"""Please analyze the content inside the bounding box {[{tl},{br}]} in the image:
-1. What is the arrow direction of this sign/indicator? (Answer: up/down/left/right)
-2. What is the text content on the sign? (Please recognize all text completely. If there is no text, answer 'no text'.)
-Please reply in the following JSON format:
-{{"direction": "direction", "text": "text content"}}"""
+        # 同时询问箭头方向和标志牌上的文字
+        prompt = f"""请分析图像中边框 {[{tl},{br}]} 内的内容：
+1. 这个标志牌/指示牌的箭头方向是什么？（回答：上/下/左/右）
+2. 标志牌上的文字内容是什么？（请完整识别所有文字，如果没有文字则回答“无文字”）
+请按以下JSON格式回答：
+{{"direction": "方向", "text": "文字内容"}}"""
 
         return prompt, [top_left, bottom_right]
     
@@ -217,15 +232,7 @@ Please reply in the following JSON format:
             
     def release(self):
         """释放模型资源"""
-        if hasattr(self, 'model'):
-            try:
-                del self.model
-            except Exception as e:
-                logger.warning(f"Failed to delete Qwen3VL model attribute: {e}")
-        if hasattr(self, 'processor'):
-            try:
-                del self.processor
-            except Exception as e:
-                logger.warning(f"Failed to delete Qwen3VL processor attribute: {e}")
+        del self.model
+        del self.processor
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

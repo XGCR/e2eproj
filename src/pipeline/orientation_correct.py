@@ -114,6 +114,9 @@ class Correcter:
         with open(correct_info_file_path, 'w', encoding='utf-8') as f:
             json.dump(correct_data_serializable, f, indent=2, ensure_ascii=False)
         print(f"角度修正已完成, 修正结果已保存: {correct_info_file_path}")
+        
+        # 返回修正后的结果列表,供后续使用
+        return correct_results
     
     
     def shrink_bounding_box(self,

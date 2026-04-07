@@ -67,14 +67,11 @@ class PipelineManager:
             sam3_config['device'] = self.config['system']['device']
             self.components['sam3'] = SAM3Detector(sam3_config)
             
-            # 初始化Qwen3VL解释器（根据config可选）
+            # 初始化Qwen3VL解释器
             qwen_config = self.config.get('qwen3vl', {})
-            if qwen_config.get('enabled', True):
-                qwen_config['device'] = qwen_config.get('device', self.config['system']['device'])
-                qwen_config['fov_x_deg'] = fov_x_deg  # 传递FOV参数
-                self.components['qwen3vl'] = Qwen3VLInterpreter(qwen_config)
-            else:
-                logger.info("Qwen3VL is disabled in config, skipping model load")
+            qwen_config['device'] = self.config['system']['device']
+            qwen_config['fov_x_deg'] = fov_x_deg  # 传递FOV参数
+            self.components['qwen3vl'] = Qwen3VLInterpreter(qwen_config)
             
             # 初始化角度修正器（传递相机配置）
             self.components['correct'] = Correcter(camera_config)
@@ -96,34 +93,6 @@ class PipelineManager:
             logger.error(f"Failed to initialize components: {e}")
             raise
     
-    def _prepare_qwen3vl(self):
-        """根据配置准备Qwen3VL解释器（按需加载/重载）。"""
-        qwen_config = self.config.get('qwen3vl', {})
-        if not qwen_config.get('enabled', True):
-            logger.info("Qwen3VL disabled in config")
-            return None
-        
-        # 如果已存在且keep_loaded为True，则直接复用
-        if qwen_config.get('keep_loaded', False) and self.components.get('qwen3vl'):
-            return self.components['qwen3vl']
-        
-        # 如果已经存在且keep_loaded为False，先释放后重新加载
-        if 'qwen3vl' in self.components and not qwen_config.get('keep_loaded', False):
-            try:
-                self.components['qwen3vl'].release()
-            except Exception as e:
-                logger.warning(f"Releasing old Qwen3VL instance failed: {e}")
-            finally:
-                self.components.pop('qwen3vl', None)
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-
-        # 设置设备参数后加载模型
-        qwen_config['device'] = qwen_config.get('device', self.config['system']['device'])
-        qwen_config['fov_x_deg'] = float(self.config.get('camera', {}).get('fov_x_deg', 90.0))
-        self.components['qwen3vl'] = Qwen3VLInterpreter(qwen_config)
-        return self.components['qwen3vl']
-
     def process_single_image(
                     self, 
                     image_path, 
@@ -165,19 +134,14 @@ class PipelineManager:
                                             )
             
         # 4. qwen3-vl
-        qwen3vl_comp = self._prepare_qwen3vl()
-        if qwen3vl_comp is None:
-            items = []
-            logger.warning("Qwen3VL is disabled or failed to load; skipping text recognition")
-        else:
-            logger.info("Running Qwen3-VL...")
-            items = qwen3vl_comp.interpret_multiple_objects(
+        logger.info("Running Qwen3-VL...")
+        items = self.components['qwen3vl'].interpret_multiple_objects(
                                             image_path, 
                                             point_series,
                                             depth_image_path,
                                             temp_organized_json_folder_str
                                             )
-
+            
         # 7. 角度修正
         logger.info("Running Orientation Correcter...")
         correct_result = self.components['correct'].process(
@@ -223,20 +187,8 @@ class PipelineManager:
                     logger.info("TTS is disabled, navigation text displayed in terminal only.")
             else:
                 logger.warning(f"Correct result file not found: {correct_json_path}")
-
-        # 重新释放Qwen3VL（如果配置要求不保持加载）
-        qwen_config = self.config.get('qwen3vl', {})
-        if not qwen_config.get('keep_loaded', False) and 'qwen3vl' in self.components:
-            try:
-                self.components['qwen3vl'].release()
-                logger.info("Qwen3VL has been released after processing this image")
-            except Exception as e:
-                logger.warning(f"Failed to release Qwen3VL after image: {e}")
-            finally:
-                self.components.pop('qwen3vl', None)
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-
+        
+            
         return correct_result
             
         # except Exception as e:
@@ -345,10 +297,7 @@ class PipelineManager:
         
         for name, component in self.components.items():
             if hasattr(component, 'release'):
-                try:
-                    component.release()
-                except Exception as e:
-                    logger.warning(f"Failed to release component {name}: {e}")
+                component.release()
         
         # 清理CUDA缓存
         if torch.cuda.is_available():

@@ -42,9 +42,6 @@ sam3:
 
 # Qwen3VL配置
 qwen3vl:
-  enabled: true
-  keep_loaded: false
-  device: "cpu"
   checkpoint_path: "models/Qwen3-VL/checkpoints/Qwen3-VL-8B-Instruct"
 
 # 路径配置

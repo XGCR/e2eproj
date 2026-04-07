@@ -142,8 +142,8 @@ class NavigationGenerator:
 
     def normalize_sign_text_for_template(self, text: str) -> str:
         """
-        Normalize sign text for template mode.
-        Keep English text always; keep non-English text if output_language matches.
+        Keep English sign text in template mode.
+        If the text is Chinese or mixed and we have no LLM, fall back to a generic phrase.
         """
         # 清理 HTML 实体
         text = re.sub(r'&nbsp;', ' ', text)
@@ -151,13 +151,8 @@ class NavigationGenerator:
         text = re.sub(r"\s+", " ", text.strip())  # 规范化空格
         if not text:
             return ""
-        # If English, always keep it
         if self.is_mostly_english(text):
             return text
-        # If non-English (e.g., Chinese) and output is in the same language, keep it
-        if self.output_language == "zh":
-            return text
-        # Otherwise discard non-English text in English mode
         return ""
 
     def build_object_summary(self, result: Dict[str, Any], depth_map: np.ndarray) -> Dict[str, Any]:

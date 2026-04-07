@@ -47,7 +47,7 @@ class DA2Predictor:
         model_config = self.config.get('model_configs').get(encoder)
         max_depth = self.config.get('max_depth').get(scene)
         
-        model = DepthAnythingV2(**{**model_config, 'max_depth': max_depth})
+        model = DepthAnythingV2(**{**model_config, 'max_depth': max_depth, 'device': str(self.device)})
         model.load_state_dict(torch.load(pretrained, map_location='cpu'))
         model = model.to(self.device).eval()  # 关键：将模型移动到设备
 

@@ -18,13 +18,13 @@ sys.path.append(str(project_root))
 from src.pipeline.pipeline_manager import PipelineManager
 
 def read_filename(image_folder):
-    # 遍历所有输入图像，支持jpg和png格式
-    image_files = glob.glob(os.path.join(image_folder, '*.jpg')) + glob.glob(os.path.join(image_folder, '*.png'))
+    # 遍历所有输入图像
+    image_files = glob.glob(os.path.join(image_folder, '*.jpg'))
 
     # 使用正则表达式提取数字部分并排序
     def extract_number(filename):
-        # 从文件名中提取数字部分，例如从"XXX1.jpg"或"XXX1.png"提取"1"
-        match = re.search(r'(\d+)\.(jpg|png)$', filename)
+        # 从文件名中提取数字部分，例如从"XXX1.jpg"提取"1"
+        match = re.search(r'(\d+)\.jpg$', filename)
         return int(match.group(1)) if match else 0
 
     # 按数字序号排序

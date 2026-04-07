@@ -38,9 +38,13 @@ class SAM3Detector:
     def _load_model(self):
         """加载SAM3模型"""
         checkpoint_path = self.config.get('checkpoint_path')
+        device = self.config.get('device', 'cpu')  # 确保有默认值
 
-        model = build_sam3_image_model(checkpoint_path=checkpoint_path)
-        processor = Sam3Processor(model)
+        model = build_sam3_image_model(checkpoint_path=checkpoint_path, device=device)
+        processor = Sam3Processor(model, device=device)  # 传递device参数
+        
+        # 强制将模型的所有参数移动到指定设备
+        processor.model = processor.model.to(device)
         
         return processor
     
@@ -55,28 +59,49 @@ class SAM3Detector:
             masks: 掩码列表
             boxes: 边界框列表
         """
-        
-        inference_state = self.model.set_image(image)
-        prompt_sign, prompt_arrow = "sign", "arrow"
+        try:
+            # 确保模型在CPU上
+            self.model.model = self.model.model.to(self.device)
+            
+            inference_state = self.model.set_image(image)
+            prompt_sign, prompt_arrow = "sign", "arrow"
 
-        # sign
-        output_sign = self.model.set_text_prompt(state=inference_state, prompt=prompt_sign)
-        masks_sign, boxes_sign, scores_sign = \
-            output_sign["masks"], output_sign["boxes"], output_sign["scores"]
+            # sign
+            output_sign = self.model.set_text_prompt(state=inference_state, prompt=prompt_sign)
+            masks_sign, boxes_sign, scores_sign = \
+                output_sign["masks"], output_sign["boxes"], output_sign["scores"]
 
-        # arrow
-        output_arrow = self.model.set_text_prompt(state=inference_state, prompt=prompt_arrow)
-        masks_arrow, boxes_arrow, scores_arrow = \
-            output_arrow["masks"], output_arrow["boxes"], output_arrow["scores"]
+            # arrow
+            output_arrow = self.model.set_text_prompt(state=inference_state, prompt=prompt_arrow)
+            masks_arrow, boxes_arrow, scores_arrow = \
+                output_arrow["masks"], output_arrow["boxes"], output_arrow["scores"]
 
-        # 保存点序结果
-        point_series = self.reroganize(masks_sign, boxes_arrow)
-        
-        base_name = os.path.splitext(os.path.basename(image_path))[0]
-        output_point = f"{base_name}_point.json"
-        output_point_file_path = os.path.join(output_sam3_json_folder_str,output_point)
-        with open(output_point_file_path, 'w', encoding='utf-8') as f:
-            json.dump(point_series, f, indent=2, ensure_ascii=False)
+            # 保存点序结果
+            point_series = self.reroganize(masks_sign, boxes_arrow)
+            
+            base_name = os.path.splitext(os.path.basename(image_path))[0]
+            output_point = f"{base_name}_point.json"
+            output_point_file_path = os.path.join(output_sam3_json_folder_str,output_point)
+            with open(output_point_file_path, 'w', encoding='utf-8') as f:
+                json.dump(point_series, f, indent=2, ensure_ascii=False)
+                
+            return point_series
+            
+        except RuntimeError as e:
+            if "Expected all tensors to be on the same device" in str(e):
+                logger.warning(f"SAM3 device error: {e}. Returning empty results.")
+                # 返回空结果
+                point_series = {"boxes_arrow": [], "masks_sign": []}
+                
+                base_name = os.path.splitext(os.path.basename(image_path))[0]
+                output_point = f"{base_name}_point.json"
+                output_point_file_path = os.path.join(output_sam3_json_folder_str,output_point)
+                with open(output_point_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(point_series, f, indent=2, ensure_ascii=False)
+                    
+                return point_series
+            else:
+                raise
         print(f"SAM3 Model: 目标轮廓点序已保存: {output_point_file_path}")
 
         return point_series

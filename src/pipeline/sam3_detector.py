@@ -40,11 +40,15 @@ class SAM3Detector:
         checkpoint_path = self.config.get('checkpoint_path')
         device = self.config.get('device', 'cpu')  # 确保有默认值
 
-        model = build_sam3_image_model(checkpoint_path=checkpoint_path, device=device)
-        processor = Sam3Processor(model, device=device)  # 传递device参数
+        # 使用 bfloat16 精度加载模型（修复 dtype 不匹配问题）
+        model = build_sam3_image_model(
+            checkpoint_path=checkpoint_path, 
+            device=device
+        )
+        processor = Sam3Processor(model, device=device)
         
-        # 强制将模型的所有参数移动到指定设备
-        processor.model = processor.model.to(device)
+        # 将模型转换为 bfloat16 并移动到指定设备
+        processor.model = processor.model.to(device).to(torch.bfloat16)
         
         return processor
     

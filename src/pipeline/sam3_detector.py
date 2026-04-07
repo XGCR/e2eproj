@@ -40,15 +40,15 @@ class SAM3Detector:
         checkpoint_path = self.config.get('checkpoint_path')
         device = self.config.get('device', 'cpu')  # 确保有默认值
 
-        # 使用 bfloat16 精度加载模型（修复 dtype 不匹配问题）
+        # 加载模型（使用默认精度，不强制转换）
         model = build_sam3_image_model(
             checkpoint_path=checkpoint_path, 
             device=device
         )
         processor = Sam3Processor(model, device=device)
         
-        # 将模型转换为 bfloat16 并移动到指定设备
-        processor.model = processor.model.to(device).to(torch.bfloat16)
+        # 将模型移动到指定设备（保持原始精度）
+        processor.model = processor.model.to(device)
         
         return processor
     
@@ -67,18 +67,7 @@ class SAM3Detector:
             # 确保模型在正确的设备上
             self.model.model = self.model.model.to(self.device)
             
-            # 如果图像是 PIL Image，需要转换为 tensor 并确保类型匹配
-            if hasattr(image, 'convert'):  # PIL Image
-                from torchvision import transforms
-                transform = transforms.Compose([
-                    transforms.ToTensor(),  # 转换为 [0, 1] 的 FloatTensor
-                ])
-                image_tensor = transform(image).unsqueeze(0).to(self.device)
-                # 转换为 bfloat16 以匹配模型权重
-                image_tensor = image_tensor.to(torch.bfloat16)
-                inference_state = self.model.set_image(image_tensor)
-            else:
-                inference_state = self.model.set_image(image)
+            inference_state = self.model.set_image(image)
             prompt_sign, prompt_arrow = "sign", "arrow"
 
             # sign

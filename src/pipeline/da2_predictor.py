@@ -47,7 +47,7 @@ class DA2Predictor:
         model_config = self.config.get('model_configs').get(encoder)
         max_depth = self.config.get('max_depth').get(scene)
         
-        model = DepthAnythingV2(**{**model_config, 'max_depth': max_depth, 'device': str(self.device)})
+        model = DepthAnythingV2(**{**model_config, 'max_depth': max_depth})
         model.load_state_dict(torch.load(pretrained, map_location='cpu'))
         model = model.to(self.device).eval()  # 关键：将模型移动到设备
 
@@ -63,7 +63,11 @@ class DA2Predictor:
         Returns:
             depth_map: 深度图 (H, W)
         """
-        try:        
+        try:
+            # 确保输入图像是 float32 类型（修复 BFloat16 和 Float 类型不匹配问题）
+            if image_np.dtype != np.float32:
+                image_np = image_np.astype(np.float32)
+            
             # 推理
             with torch.no_grad():
                 depth_map = self.model.infer_image(image_np)

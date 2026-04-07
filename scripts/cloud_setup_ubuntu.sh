@@ -8,8 +8,9 @@ PYTHON_VERSION="${PYTHON_VERSION:-3.11}"
 
 cd "$PROJECT_ROOT"
 
-sudo apt-get update
-sudo apt-get install -y git git-lfs wget curl ca-certificates build-essential pkg-config
+# RunPod 容器默认以 root 运行，不需要 sudo
+apt-get update || true
+apt-get install -y git git-lfs wget curl ca-certificates build-essential pkg-config || true
 git lfs install
 
 if [ ! -x "$CONDA_HOME/bin/conda" ]; then

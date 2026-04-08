@@ -1,0 +1,18 @@
+[
+  {
+    "alpha": 0,
+    "theta": "",
+    "image_path": "data/input/image/141.png",
+    "depth_path": "data/output/depth_image/141_depth.tiff",
+    "arrow_box": [
+      [
+        288,
+        320
+      ],
+      [
+        312,
+        349
+      ]
+    ]
+  }
+]

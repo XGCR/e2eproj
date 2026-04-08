@@ -113,12 +113,11 @@ class PipelineManager:
                                             output_sam3_json_folder_str
                                             )
         
-        # 3.5 立即释放 DA2 和 SAM3 显存，为 Qwen3-VL 和后续处理腾出空间
-        logger.info("Releasing DA2 and SAM3 GPU memory...")
-        self.components['da2'].release()
-        self.components['sam3'].release()
+        # 3.5 清理 DA2 和 SAM3 显存，为 Qwen3-VL 和后续处理腾出空间（但不释放模型本身）
+        logger.info("Clearing DA2 and SAM3 GPU memory...")
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+            torch.cuda.synchronize()
             
         # 4. qwen3-vl
         logger.info("Running Qwen3-VL...")

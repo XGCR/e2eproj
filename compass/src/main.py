@@ -96,16 +96,32 @@ def main():
 
     input_image_folder_str = paths.get('input_image_folder')
     image_files = read_filename(input_image_folder_str)
+    
+    # 批处理参数
+    batch_size = 3
+    
     try:
-        for idx, img_file in enumerate(image_files):
-            # 处理图像
-            if os.path.isfile(img_file):
-                logger.info(f"=== Processing image {idx+1}/{len(image_files)}: {img_file} ===")
+        # 创建一个 Pipeline 实例供所有图像使用，避免重复初始化开销
+        logger.info("Creating pipeline for batch processing...")
+        pipeline_start = time.time()
+        pipeline = PipelineManager(config_path)
+        pipeline_time = time.time() - pipeline_start
+        print(f"✓ Pipeline creation took {pipeline_time:.2f}s")
+        
+        try:
+            # 按批处理图像，使用同一个 Pipeline 实例
+            for batch_start in range(0, len(image_files), batch_size):
+                batch_end = min(batch_start + batch_size, len(image_files))
+                batch_images = image_files[batch_start:batch_end]
+                batch_num = batch_start // batch_size + 1
+                num_batches = (len(image_files) + batch_size - 1) // batch_size
                 
-                # 在创建新 pipeline 前强力清理显存
-                if idx > 0:
+                logger.info(f"=== Processing Batch {batch_num}/{num_batches} ({len(batch_images)} images) ===")
+                
+                # 在处理新批次前清理显存
+                if batch_start > 0:
                     cleanup_start = time.time()
-                    logger.info("Aggressive GPU memory cleanup...")
+                    logger.info("Aggressive GPU memory cleanup between batches...")
                     for _ in range(3):
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
@@ -114,43 +130,40 @@ def main():
                     cleanup_time = time.time() - cleanup_start
                     print(f"✓ GPU cleanup took {cleanup_time:.2f}s")
                 
-                # 为每张图像创建新的 Pipeline（确保显存是干净的）
-                pipeline_start = time.time()
-                logger.info("Creating fresh pipeline for this image...")
-                pipeline = PipelineManager(config_path)
-                pipeline_time = time.time() - pipeline_start
-                print(f"✓ Pipeline creation took {pipeline_time:.2f}s")
-                
-                try:
-                    process_start = time.time()
-                    pipeline.process_single_image(
-                                                img_file, 
-                                                output_depth_folder_str,
-                                                output_sam3_json_folder_str,
-                                                temp_organized_json_folder_str,
-                                                output_correct_json_folder_str
-                                                )
-                    process_time = time.time() - process_start
-                    print(f"✓ Image processing took {process_time:.2f}s")
-                finally:
-                    # 处理完这张图像后，立即释放 pipeline
-                    release_start = time.time()
-                    logger.info("Releasing pipeline to free GPU memory...")
-                    pipeline.release()
-                    del pipeline
-                    release_time = time.time() - release_start
-                    print(f"✓ Pipeline release took {release_time:.2f}s")
-                    
-                    # 激进清理显存，为下一张图像腾出空间
-                    logger.info("Clearing GPU memory...")
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                        torch.cuda.synchronize()
-                    gc.collect()
-                                    
-            else:
-                logger.error(f"Input path does not exist: {img_file}")
-                sys.exit(1)
+                # 处理这个批次中的所有图像
+                for img_idx, img_file in enumerate(batch_images):
+                    img_num = batch_start + img_idx + 1
+                    if os.path.isfile(img_file):
+                        logger.info(f"  → Processing image {img_num}/{len(image_files)}: {img_file}")
+                        
+                        process_start = time.time()
+                        pipeline.process_single_image(
+                                                    img_file, 
+                                                    output_depth_folder_str,
+                                                    output_sam3_json_folder_str,
+                                                    temp_organized_json_folder_str,
+                                                    output_correct_json_folder_str
+                                                    )
+                        process_time = time.time() - process_start
+                        print(f"✓ Image {img_num} processing took {process_time:.2f}s")
+                    else:
+                        logger.error(f"Input path does not exist: {img_file}")
+                        sys.exit(1)
+        finally:
+            # 处理完所有图像后，释放 pipeline
+            release_start = time.time()
+            logger.info("Releasing pipeline...")
+            pipeline.release()
+            del pipeline
+            release_time = time.time() - release_start
+            print(f"✓ Pipeline release took {release_time:.2f}s")
+            
+            # 最后清理显存
+            logger.info("Final GPU memory cleanup...")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            gc.collect()
 
         logger.info("Pipeline processing completed successfully!")
             

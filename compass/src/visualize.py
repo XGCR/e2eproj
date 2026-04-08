@@ -251,13 +251,10 @@ def is_position_within_bounds(text_rect, img_width, img_height):
     return not (x1 < 0 or y1 < 0 or x2 >= img_width or y2 >= img_height)
 
 def find_closest_text_position(points, img_width, img_height, text_width, text_height,
-                               forbidden_masks, used_text_rectangles, padding=5,
-                               arrow_direction=None):
+                               forbidden_masks, used_text_rectangles, padding=5):
     """
     为指定线框寻找最近的文本位置
     策略：尝试线框周围的多个位置，找到最近的有效位置
-    参数：
-        arrow_direction: (dx, dy) 法向量箭头的方向向量，用于避免与箭头重叠
     """
     min_x, min_y = np.min(points, axis=0)
     max_x, max_y = np.max(points, axis=0)
@@ -273,52 +270,25 @@ def find_closest_text_position(points, img_width, img_height, text_width, text_h
     
     search_positions = []
     
-    # 根据箭头方向调整优先级
-    # 如果有箭头信息，优先选择与箭头方向相反的位置
-    above_weight = 1
-    below_weight = 2
-    left_weight = 3
-    right_weight = 4
-    
-    if arrow_direction is not None:
-        arrow_dx, arrow_dy = arrow_direction
-        # 如果箭头主要指向下方，优先选择上方（降低上方权重）
-        if arrow_dy > 0.3:
-            above_weight = 0.5  # 优先上方
-            below_weight = 3
-        # 如果箭头主要指向上方，优先选择下方
-        elif arrow_dy < -0.3:
-            above_weight = 3
-            below_weight = 0.5  # 优先下方
-        
-        # 如果箭头主要指向左方，优先选择右方
-        if arrow_dx < -0.3:
-            left_weight = 3
-            right_weight = 0.5  # 优先右方
-        # 如果箭头主要指向右方，优先选择左方
-        elif arrow_dx > 0.3:
-            left_weight = 0.5  # 优先左方
-            right_weight = 3
-    
     # 1. 紧贴线框上方（中心对齐）
     y_above = min_y - text_height - padding - 3  # 3像素的安全距离
     if y_above >= 0:
-        search_positions.append(("above_center", center_x - text_width//2, y_above, above_weight))
+        search_positions.append(("above_center", center_x - text_width//2, y_above, 1))
     
     # 2. 紧贴线框下方（中心对齐）
     y_below = max_y + 3  # 3像素的安全距离
     if y_below + text_height + padding < img_height:
-        search_positions.append(("below_center", center_x - text_width//2, y_below, below_weight))
+        search_positions.append(("below_center", center_x - text_width//2, y_below, 2))
     
     # 3. 紧贴线框左侧（垂直居中）
     x_left = min_x - text_width - padding - 3
     if x_left >= 0:
-        search_positions.append(("left_center", x_left, center_y - text_height//2, left_weight))
+        search_positions.append(("left_center", x_left, center_y - text_height//2, 3))
     
     # 4. 紧贴线框右侧（垂直居中）
     x_right = max_x + 3
     if x_right + text_width + padding < img_width:
-        search_positions.append(("right_center", x_right, center_y - text_height//2, right_weight))
+        search_positions.append(("right_center", x_right, center_y - text_height//2, 4))
     
     # 5. 线框左上角附近
     search_positions.append(("corner_top_left", min_x, min_y - text_height - padding - 3, 5))
@@ -779,30 +749,16 @@ def visualize_on_depth_image(depth_path, results_for_depth, output_path):
     for idx in sorted_indices:
         points = points_list[idx]
         N_deg_text = texts_list[idx]
-        normal_3d = normals_list[idx]
         
         # 获取文本尺寸
         padding = 5
         
         N_deg_width, N_deg_height = get_text_dimensions(N_deg_text, font_size)
         
-        # 计算箭头方向（用于避免文本与箭头重叠）
-        # 提取法向量的x和y分量（在2D图像坐标系中）
-        arrow_dx = normal_3d[0]  # x: 右为正
-        arrow_dy = -normal_3d[1]  # y: 下为正（取负是因为3D y向上，但2D y向下）
-        
-        # 归一化方向向量
-        arrow_norm = np.sqrt(arrow_dx**2 + arrow_dy**2)
-        if arrow_norm > 0:
-            arrow_direction = (arrow_dx / arrow_norm, arrow_dy / arrow_norm)
-        else:
-            arrow_direction = None
-        
         # 寻找最近的文本位置
         pos_type, text_x, text_y = find_closest_text_position(
             points, depth_width, depth_height, N_deg_width, N_deg_height,
-            forbidden_masks, used_text_rectangles, padding,
-            arrow_direction=arrow_direction
+            forbidden_masks, used_text_rectangles, padding
         )
         
         # 绘制带背景的文本（黄色背景）
@@ -951,7 +907,8 @@ def visualize_all_results(
         # 在图像上绘制所有结果
         img_vis = visualize_on_image(image_path, correct_results, output_image_path)
         # 添加到已处理集合
-        processed_images.add(image_path)
+        if img_vis is not None:
+            processed_images.add(image_path)
 
         # 2 深度结果
         depth_path = correct_results[0]["depth_path"]
@@ -962,14 +919,22 @@ def visualize_all_results(
         # 在深度图像上绘制所有结果
         depth_vis = visualize_on_depth_image(depth_path, correct_results, output_depth_path)
         # 添加到已处理集合
-        processed_depths.add(depth_path)
+        if depth_vis is not None:
+            processed_depths.add(depth_path)
         
         # 3 图像&深度结果
-        # 创建输出路径
-        id_base_name = os.path.basename(image_path)
-        id_name_without_ext = os.path.splitext(id_base_name)[0]
-        output_id_path = os.path.join(visualize_id_folder_str, f"annotated_{id_name_without_ext}_combined.jpg")
-        visualize_on_combined(img_vis, depth_vis, correct_results, output_id_path)
+        # 只有两个都成功才创建并排图像
+        if img_vis is not None and depth_vis is not None:
+            # 创建输出路径
+            id_base_name = os.path.basename(image_path)
+            id_name_without_ext = os.path.splitext(id_base_name)[0]
+            output_id_path = os.path.join(visualize_id_folder_str, f"annotated_{id_name_without_ext}_combined.jpg")
+            visualize_on_combined(img_vis, depth_vis, correct_results, output_id_path)
+        else:
+            if img_vis is None:
+                print(f"  警告: 跳过图像结果，因为无法读取 {image_path}")
+            if depth_vis is None:
+                print(f"  警告: 跳过深度图像，因为无法读取 {depth_path}")
 
     print(f"\n完成！")
     

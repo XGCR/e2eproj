@@ -548,6 +548,12 @@ def visualize_on_image(image_path, results_for_image, output_path):
     
     img_height, img_width = img.shape[:2]
     
+    # 如果没有结果，直接保存原始图像
+    if not results_for_image:
+        cv2.imwrite(output_path, img)
+        print(f"图像已保存（无标注）: {output_path}")
+        return img
+    
     # 准备数据
     points_list = []
     texts_list = []
@@ -660,6 +666,12 @@ def visualize_on_depth_image(depth_path, results_for_depth, output_path):
         depth_rgb = cv2.cvtColor(depth_normalized.astype(np.uint8), cv2.COLOR_GRAY2BGR)
     
     depth_height, depth_width = depth_rgb.shape[:2]
+    
+    # 如果没有结果，直接保存原始深度图像
+    if not results_for_depth:
+        cv2.imwrite(output_path, depth_rgb)
+        print(f"深度图像已保存（无标注）: {output_path}")
+        return depth_rgb
     
     # 自动计算字体大小：根据图像高度
     # 图像高度的 1/18 作为字体大小（比原来更小），最小 12，最大 50
@@ -889,52 +901,58 @@ def visualize_all_results(
     for json_file in json_files:
         # 加载JSON数据
         data = load_json(json_file)
-        correct_results = data["correct_results"]
+        correct_results = data.get("correct_results", [])
         
-        # 如果没有结果，跳过
-        if not correct_results:
-            print(f"JSON文件 {json_file} 中没有结果，跳过")
+        # 从JSON文件名提取图像编号和路径
+        base_json_name = os.path.basename(json_file)
+        json_name_without_ext = os.path.splitext(base_json_name)[0]
+        
+        # 从JSON文件名提取数字（如 "1_correct.json" -> "1"）
+        match = re.search(r'(\d+)', json_name_without_ext)
+        if not match:
+            print(f"无法从文件名 {base_json_name} 中提取图像编号，跳过")
             continue
         
-        print(f"从 {json_file} 加载了 {len(correct_results)} 个结果")
+        image_num = match.group(1)
         
-        # 1 图像结果                
-        image_path = correct_results[0]["image_path"]
-        # 创建输出路径
-        base_image_name = os.path.basename(image_path)
-        image_name_without_ext = os.path.splitext(base_image_name)[0]
+        # 构造图像路径和深度路径
+        input_image_folder = "data/input/image"
+        output_depth_folder = "data/output/depth_image"
+        image_path = os.path.join(input_image_folder, f"{image_num}.png")
+        depth_path = os.path.join(output_depth_folder, f"{image_num}_depth.tiff")
+        
+        print(f"处理 {base_json_name}：{len(correct_results)} 个结果")
+        
+        # 1 图像结果
+        # 即使没有结果也要生成annotated图片
+        image_name_without_ext = image_num
         output_image_path = os.path.join(visualize_i_folder_str, f"annotated_{image_name_without_ext}.jpg")
-        # 在图像上绘制所有结果
+        # 在图像上绘制所有结果（如果有的话）
         img_vis = visualize_on_image(image_path, correct_results, output_image_path)
         # 添加到已处理集合
         if img_vis is not None:
             processed_images.add(image_path)
+        else:
+            print(f"  警告: 无法读取或处理图像 {image_path}")
 
         # 2 深度结果
-        depth_path = correct_results[0]["depth_path"]
-        # 创建输出路径
-        base_depth_name = os.path.basename(depth_path)
-        depth_name_without_ext = os.path.splitext(base_depth_name)[0]
+        # 即使没有结果也要生成annotated图片
+        depth_name_without_ext = f"{image_num}_depth"
         output_depth_path = os.path.join(visualize_d_folder_str, f"annotated_{depth_name_without_ext}_depth.png")
-        # 在深度图像上绘制所有结果
+        # 在深度图像上绘制所有结果（如果有的话）
         depth_vis = visualize_on_depth_image(depth_path, correct_results, output_depth_path)
         # 添加到已处理集合
         if depth_vis is not None:
             processed_depths.add(depth_path)
+        else:
+            print(f"  警告: 无法读取或处理深度图像 {depth_path}")
         
         # 3 图像&深度结果
         # 只有两个都成功才创建并排图像
         if img_vis is not None and depth_vis is not None:
             # 创建输出路径
-            id_base_name = os.path.basename(image_path)
-            id_name_without_ext = os.path.splitext(id_base_name)[0]
-            output_id_path = os.path.join(visualize_id_folder_str, f"annotated_{id_name_without_ext}_combined.jpg")
+            output_id_path = os.path.join(visualize_id_folder_str, f"annotated_{image_num}_combined.jpg")
             visualize_on_combined(img_vis, depth_vis, correct_results, output_id_path)
-        else:
-            if img_vis is None:
-                print(f"  警告: 跳过图像结果，因为无法读取 {image_path}")
-            if depth_vis is None:
-                print(f"  警告: 跳过深度图像，因为无法读取 {depth_path}")
 
     print(f"\n完成！")
     

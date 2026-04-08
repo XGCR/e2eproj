@@ -1,0 +1,46 @@
+# 系统配置
+system:
+  device: "cuda"  # or "cpu"
+  num_workers: 4
+  seed: 42
+  log_level: "INFO"
+
+# Depth Anything 2 配置
+da2:
+  scene: "outdoor" # indoor & outdoor
+  dataset: 
+    indoor: "hypersim" # 'hypersim' for indoor model, 'vkitti' for outdoor model
+    outdoor: "vkitti"
+  encoder: "vitl"
+  checkpoint_paths:
+    hypersim:
+      vitl: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_hypersim_vitl.pth"
+      vitb: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_hypersim_vitb.pth"
+      vits: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_hypersim_vits.pth"
+    vkitti:
+      vitl: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_vkitti_vitl.pth"
+      vitb: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_vkitti_vitb.pth"
+      vits: "models/Depth-Anything-V2/metric_depth/checkpoints/depth_anything_v2_metric_vkitti_vits.pth"
+  model_configs:
+    vits: {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]}
+    vitb: {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]}
+    vitl: {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]}
+  max_depth:
+    indoor: 20
+    outdoor: 80
+
+# SAM3配置
+sam3:
+  checkpoint_path: "models/sam3/checkpoints/sam3.pt"
+
+# Qwen3VL配置
+qwen3vl:
+  checkpoint_path: "models/Qwen3-VL/checkpoints/Qwen3-VL-8B-Instruct"
+
+# 路径配置
+paths:
+  input_image_folder: "data/input/image"
+  output_depth_folder: "data/output/depth_image"
+  output_sam3_json_folder: "data/output/sam3_json"
+  temp_organized_json_folder: "data/temp"  
+  output_correct_json_folder: "data/output/correct"

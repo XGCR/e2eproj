@@ -1,0 +1,51 @@
+进入linux系统后
+
+1. 运行 create_compass_proj.sh 创建项目（包含各层级子目录）
+
+--compass
+	--configs/
+	--data/
+	--models/
+	--scripts/
+	--src/
+	   --pipeline/
+
+2. 把当前configs/ scritps/ src/ 目录中的内容拷贝进去
+
+3. cd compass/scrips/  # 进入脚本目录
+
+3-1. sh download_model.sh # 克隆模型库
+
+--compass
+	--configs/
+	--data/
+	--models/
+	   --Depth-Anything-V2
+	   --Qwen3-VL
+	   --sam3
+	--scripts/
+	--src/
+	   --pipeline/
+
+3-2. sh read_env.sh # 安装模型运行依赖环境， 虚拟环境名字为：compass
+
+4. 代码、环境都已准备好，将需要处理的图像上传到 data/image 目录下
+	cd ../data
+	mkdir image
+
+--compass
+	--configs/
+	--data/
+	   --image/
+	--models/
+	   --Depth-Anything-V2
+	   --Qwen3-VL
+	   --sam3
+	--scripts/
+	--src/
+	   --pipeline/
+
+5. 运行推理、可视化脚本
+	cd ../scritps
+	sh run_inference.sh
+	sh run_visualize.sh
